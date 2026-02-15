@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nifty Pro Dashboard</title>
+<style>
+body{font-family:Arial;background:#0f172a;color:white;padding:20px}
+.card{background:#1e293b;padding:15px;border-radius:10px;margin-bottom:15px}
+.green{color:#22c55e}
+.red{color:#ef4444}
+button{width:100%;padding:12px;background:#2563eb;border:none;color:white;border-radius:8px}
+</style>
+</head>
+<body>
+
+<h2>NIFTY Pro Dashboard</h2>
+
+<div class="card" id="market">Loading...</div>
+<div class="card" id="vix">Loading VIX...</div>
+
+<div class="card">
+<h3>Market News</h3>
+<div id="news"></div>
+</div>
+
+<button onclick="loadAll()">Refresh</button>
+
+<script>
+
+async function loadAll(){
+  loadMarket();
+  loadVix();
+  loadNews();
+}
+
+async function loadMarket(){
+  const res = await fetch("/api/nifty");
+  const data = await res.json();
+  const meta = data.chart.result[0].meta;
+
+  const current = meta.regularMarketPrice;
+  const prev = meta.previousClose;
+  const change = (current - prev).toFixed(2);
+
+  document.getElementById("market").innerHTML =
+  `Current: ${current}<br>
+   Change: <span class="${change>0?'green':'red'}">${change}</span>`;
+}
+
+async function loadVix(){
+  const res = await fetch("/api/vix");
+  const data = await res.json();
+  const vix = data.chart.result[0].meta.regularMarketPrice;
+  document.getElementById("vix").innerHTML = "India VIX: " + vix;
+}
+
+async function loadNews(){
+  const res = await fetch("/api/news");
+  const data = await res.json();
+  let html="";
+  data.news.forEach(n=>{
+    html+=`<b>${n.title}</b><br><hr>`;
+  });
+  document.getElementById("news").innerHTML=html;
+}
+
+loadAll();
+
+</script>
+</body>
+</html>
