@@ -3,14 +3,35 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nifty Pro Dashboard</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <style>
-body{font-family:Arial;background:#0f172a;color:white;padding:20px}
-.card{background:#1e293b;padding:15px;border-radius:10px;margin-bottom:15px}
+body{
+  font-family:Arial;
+  background:#0f172a;
+  color:white;
+  padding:20px;
+}
+
+.card{
+  background:#1e293b;
+  padding:15px;
+  border-radius:10px;
+  margin-bottom:15px;
+}
+
 .green{color:#22c55e}
 .red{color:#ef4444}
-button{width:100%;padding:12px;background:#2563eb;border:none;color:white;border-radius:8px}
+
+canvas{
+  background:#111827;
+  border-radius:10px;
+  padding:10px;
+}
 </style>
 </head>
+
 <body>
 
 <h2>NIFTY Pro Dashboard</h2>
@@ -19,19 +40,19 @@ button{width:100%;padding:12px;background:#2563eb;border:none;color:white;border
 <div class="card" id="vix">Loading VIX...</div>
 
 <div class="card">
+  <canvas id="chart" height="120"></canvas>
+</div>
+
+<div class="card">
 <h3>Market News</h3>
 <div id="news"></div>
 </div>
 
-<button onclick="loadAll()">Refresh</button>
-
 <script>
 
-async function loadAll(){
-  loadMarket();
-  loadVix();
-  loadNews();
-}
+let chart;
+let priceHistory = [];
+let labelHistory = [];
 
 async function loadMarket(){
   const res = await fetch("/api/nifty");
@@ -42,15 +63,35 @@ async function loadMarket(){
   const prev = meta.previousClose;
   const change = (current - prev).toFixed(2);
 
-  document.getElementById("market").innerHTML =
+  const marketDiv = document.getElementById("market");
+
+  marketDiv.innerHTML =
   `Current: ${current}<br>
    Change: <span class="${change>0?'green':'red'}">${change}</span>`;
+
+  // Animate
+  marketDiv.style.transform = "scale(1.02)";
+  setTimeout(()=> marketDiv.style.transform = "scale(1)", 200);
+
+  // Update Chart
+  const now = new Date().toLocaleTimeString();
+
+  priceHistory.push(current);
+  labelHistory.push(now);
+
+  if(priceHistory.length > 20){
+    priceHistory.shift();
+    labelHistory.shift();
+  }
+
+  updateChart();
 }
 
 async function loadVix(){
   const res = await fetch("/api/vix");
   const data = await res.json();
   const vix = data.chart.result[0].meta.regularMarketPrice;
+
   document.getElementById("vix").innerHTML = "India VIX: " + vix;
 }
 
@@ -80,8 +121,54 @@ async function loadNews(){
   document.getElementById("news").innerHTML = html;
 }
 
-loadAll();
+function createChart(){
+  const ctx = document.getElementById('chart').getContext('2d');
+
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labelHistory,
+      datasets: [{
+        label: 'NIFTY Live',
+        data: priceHistory,
+        borderColor: '#22c55e',
+        borderWidth: 2,
+        fill: false,
+        tension: 0.3
+      }]
+    },
+    options: {
+      responsive:true,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{display:false},
+        y:{display:true}
+      }
+    }
+  });
+}
+
+function updateChart(){
+  if(!chart){
+    createChart();
+  }else{
+    chart.data.labels = labelHistory;
+    chart.data.datasets[0].data = priceHistory;
+    chart.update();
+  }
+}
+
+// Initial Load
+loadMarket();
+loadVix();
+loadNews();
+
+// Auto Refresh
+setInterval(loadMarket, 2000);   // every 2 seconds
+setInterval(loadVix, 5000);      // every 5 seconds
+setInterval(loadNews, 60000);    // every 60 seconds
 
 </script>
+
 </body>
 </html>
