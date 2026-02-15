@@ -27,15 +27,6 @@ app.get("/api/vix", async (req, res) => {
   }
 });
 
-app.get("/api/news", async (req, res) => {
-  try {
-    const response = await fetch("https://query1.finance.yahoo.com/v1/finance/search?q=NIFTY&newsCount=5");
-    const data = await response.json();
-    res.json(data);
-  } catch {
-    res.status(500).json({ error: "News fetch failed" });
-  }
-});
 
 app.listen(PORT, () => {
   console.log("Server running on port " + PORT);
