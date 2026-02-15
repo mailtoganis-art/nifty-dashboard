@@ -29,8 +29,9 @@ app.get("/api/vix", async (req, res) => {
 
 app.get("/api/news", async (req, res) => {
   try {
-    const response = await fetch(
-      "https://newsapi.org/v2/top-headlines?category=business&country=in&apiKey=a5f2b09345444435949c1855e366a59b"
+ const response = await fetch(
+  "https://newsapi.org/v2/everything?q=stock%20market&sortBy=publishedAt&language=en&apiKey=a5f2b09345444435949c1855e366a59b"
+);"
     );
     const data = await response.json();
     res.json(data);
