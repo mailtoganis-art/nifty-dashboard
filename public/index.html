@@ -57,11 +57,27 @@ async function loadVix(){
 async function loadNews(){
   const res = await fetch("/api/news");
   const data = await res.json();
-  let html="";
-  data.news.forEach(n=>{
-    html+=`<b>${n.title}</b><br><hr>`;
-  });
-  document.getElementById("news").innerHTML=html;
+
+  let html = "";
+
+  if (!data.articles || data.articles.length === 0) {
+    html = "No news available.";
+  } else {
+    data.articles.slice(0,5).forEach(article => {
+      html += `
+        <div style="margin-bottom:10px">
+          <a href="${article.url}" target="_blank" style="color:white;text-decoration:none">
+            <b>${article.title}</b>
+          </a>
+          <br>
+          <small style="opacity:0.7">${article.source.name}</small>
+          <hr>
+        </div>
+      `;
+    });
+  }
+
+  document.getElementById("news").innerHTML = html;
 }
 
 loadAll();
