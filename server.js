@@ -29,9 +29,8 @@ app.get("/api/vix", async (req, res) => {
 
 app.get("/api/news", async (req, res) => {
   try {
- const response = await fetch(
-  "https://newsapi.org/v2/everything?q=stock%20market&sortBy=publishedAt&language=en&apiKey=a5f2b09345444435949c1855e366a59b"
-);"
+    const response = await fetch(
+      "https://newsapi.org/v2/everything?q=stock%20market&sortBy=publishedAt&language=en&apiKey=a5f2b09345444435949c1855e366a59b"
     );
     const data = await response.json();
     res.json(data);
@@ -39,6 +38,7 @@ app.get("/api/news", async (req, res) => {
     res.status(500).json({ error: "News fetch failed" });
   }
 });
+
 app.listen(PORT, () => {
   console.log("Server running on port " + PORT);
 });
