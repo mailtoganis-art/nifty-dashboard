@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nifty Pro Dashboard</title>
+<title>Nifty Intelligence Dashboard</title>
 
 <style>
 body{
@@ -19,41 +19,63 @@ body{
   margin-bottom:15px;
 }
 
-.green{color:#22c55e}
-.red{color:#ef4444}
-
-button{
-  width:100%;
-  padding:12px;
-  background:#2563eb;
-  border:none;
-  color:white;
-  border-radius:8px;
+.heading{
+  font-size:18px;
+  margin-bottom:8px;
+  color:#60a5fa;
 }
+
+.green{color:#22c55e;font-weight:bold;}
+.red{color:#ef4444;font-weight:bold;}
+.yellow{color:#facc15;font-weight:bold;}
+
+.biasBox{
+  text-align:center;
+  padding:20px;
+  font-size:22px;
+  border-radius:12px;
+}
+
+.callBox{background:#064e3b;}
+.putBox{background:#7f1d1d;}
+.waitBox{background:#374151;}
+
+small{opacity:0.7;}
 </style>
 </head>
 
 <body>
 
-<h2>NIFTY Pro Dashboard</h2>
+<h2>Nifty 15-Min Intelligence Engine</h2>
 
-<div class="card" id="market">Loading...</div>
-<div class="card" id="vix">Loading VIX...</div>
-<div class="card" id="biasBox">Loading Bias...</div>
+<div class="card" id="marketStatus"></div>
 
 <div class="card">
-<h3>Market News</h3>
-<div id="news"></div>
+  <div class="heading">📊 Market Overview</div>
+  <div id="market"></div>
+  <div id="vix"></div>
 </div>
 
-<button onclick="loadAll()">Refresh</button>
+<div class="card">
+  <div class="heading">📈 Trend & Momentum</div>
+  <div id="trendDetails"></div>
+</div>
+
+<div class="card">
+  <div class="heading">🎯 Final Decision</div>
+  <div id="biasBox" class="biasBox waitBox">Loading...</div>
+</div>
+
+<div class="card">
+  <div class="heading">📰 Latest Market News</div>
+  <div id="news"></div>
+</div>
 
 <script>
 
-// ================= MASTER LOAD =================
+// ================= LOAD ALL =================
 async function loadAll(){
   loadMarket();
-  loadVix();
   loadBias();
   loadNews();
 }
@@ -61,108 +83,99 @@ async function loadAll(){
 
 // ================= MARKET =================
 async function loadMarket(){
-  try{
-    const res = await fetch("/api/nifty");
-    const data = await res.json();
+  const res = await fetch("/api/nifty");
+  const data = await res.json();
 
-    if (!data.marketLive) {
-      document.getElementById("market").innerHTML =
-        `<span style="color:#facc15">${data.message}</span>`;
-      return;
-    }
-
-    const meta = data.data.chart.result[0].meta;
-    const current = meta.regularMarketPrice;
-    const prev = meta.previousClose;
-    const change = (current - prev).toFixed(2);
-
-    document.getElementById("market").innerHTML =
-      `Current: ${current}<br>
-       Change: <span class="${change>0?'green':'red'}">${change}</span>`;
-  } catch(e){
-    document.getElementById("market").innerHTML = "Error loading market";
+  if (!data.marketLive) {
+    document.getElementById("marketStatus").innerHTML =
+      `<span class="yellow">${data.message}</span>`;
+    document.getElementById("market").innerHTML="";
+    document.getElementById("vix").innerHTML="";
+    return;
   }
-}
 
+  document.getElementById("marketStatus").innerHTML =
+    `<span class="green">Market Live</span>`;
 
-// ================= VIX =================
-async function loadVix(){
-  try{
-    const res = await fetch("/api/vix");
-    const data = await res.json();
+  const meta = data.data.chart.result[0].meta;
+  const current = meta.regularMarketPrice;
+  const prev = meta.previousClose;
+  const change = (current - prev).toFixed(2);
 
-    if (!data.marketLive) {
-      document.getElementById("vix").innerHTML =
-        `<span style="color:#facc15">${data.message}</span>`;
-      return;
-    }
+  document.getElementById("market").innerHTML =
+    `Nifty Current: ${current} 
+     <br>Change: <span class="${change>0?'green':'red'}">${change}</span>`;
 
-    const vix = data.data.chart.result[0].meta.regularMarketPrice;
-    document.getElementById("vix").innerHTML = "India VIX: " + vix;
-  } catch(e){
-    document.getElementById("vix").innerHTML = "Error loading VIX";
+  // VIX
+  const vixRes = await fetch("/api/vix");
+  const vixData = await vixRes.json();
+
+  if (vixData.marketLive) {
+    const vix = vixData.data.chart.result[0].meta.regularMarketPrice;
+    document.getElementById("vix").innerHTML =
+      `India VIX: ${vix}`;
   }
 }
 
 
 // ================= BIAS =================
 async function loadBias(){
-  try{
-    const res = await fetch("/api/bias");
-    const data = await res.json();
+  const res = await fetch("/api/bias");
+  const data = await res.json();
 
-    if (!data.marketLive) {
-      document.getElementById("biasBox").innerHTML =
-        `<span style="color:#facc15">${data.message}</span>`;
-      return;
-    }
-
+  if (!data.marketLive) {
+    document.getElementById("biasBox").className="biasBox waitBox";
     document.getElementById("biasBox").innerHTML =
-      `<b>${data.bias}</b><br>
-       Entry Level: ${data.entryLevel}<br>
-       Current: ${data.current}`;
-  } catch(e){
-    document.getElementById("biasBox").innerHTML = "Error loading bias";
+      `<span class="yellow">${data.message}</span>`;
+    return;
   }
+
+  let boxClass="waitBox";
+  let colorClass="yellow";
+
+  if (data.bias.includes("CALL")) {
+    boxClass="callBox";
+    colorClass="green";
+  } 
+  else if (data.bias.includes("PUT")) {
+    boxClass="putBox";
+    colorClass="red";
+  }
+
+  document.getElementById("biasBox").className="biasBox " + boxClass;
+
+  document.getElementById("biasBox").innerHTML =
+    `<div class="${colorClass}">${data.bias}</div>
+     <small>Entry Level: ${data.entryLevel || "Wait Breakout"}</small>
+     <br><small>Current Price: ${data.current}</small>`;
+
+  document.getElementById("trendDetails").innerHTML =
+    `Bias Confidence: ${data.confidence || 50}%`;
 }
 
 
 // ================= NEWS =================
 async function loadNews(){
-  try{
-    const res = await fetch("/api/news");
-    const data = await res.json();
+  const res = await fetch("/api/news");
+  const data = await res.json();
 
-    let html = "";
-
-    if (!data.articles || data.articles.length === 0) {
-      html = "No news available.";
-    } else {
-      data.articles.slice(0,5).forEach(article => {
-        html += `
-          <div style="margin-bottom:10px">
-            <a href="${article.url}" target="_blank" style="color:white;text-decoration:none">
-              <b>${article.title}</b>
-            </a>
-            <br>
-            <small style="opacity:0.7">${article.source.name}</small>
-            <hr>
-          </div>
-        `;
-      });
-    }
-
-    document.getElementById("news").innerHTML = html;
-  } catch(e){
-    document.getElementById("news").innerHTML = "Error loading news";
+  let html="";
+  if (data.articles) {
+    data.articles.slice(0,3).forEach(article=>{
+      html+=`<div>
+        <b>${article.title}</b><br>
+        <small>${article.source.name}</small>
+        <hr>
+      </div>`;
+    });
   }
+  document.getElementById("news").innerHTML=html;
 }
 
 
-// ================= AUTO REFRESH =================
-setInterval(loadAll, 1000);
+// Auto Refresh every 5 seconds
+setInterval(loadAll, 5000);
 
-// Initial Load
 loadAll();
 
 </script>
