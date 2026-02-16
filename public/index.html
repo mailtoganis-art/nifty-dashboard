@@ -6,7 +6,7 @@
 
 <style>
 body{
-  font-family:Arial;
+  font-family: Arial;
   background:#0f172a;
   color:white;
   padding:20px;
@@ -19,18 +19,11 @@ body{
   margin-bottom:15px;
 }
 
-.green{color:#22c55e;}
-.red{color:#ef4444;}
-.yellow{color:#facc15;}
+.green{ color:#22c55e; }
+.red{ color:#ef4444; }
+.yellow{ color:#facc15; }
 
-.highlight{
-  font-size:22px;
-  font-weight:bold;
-  text-align:center;
-  padding:15px;
-  border-radius:10px;
-  margin-top:10px;
-}
+h2{ margin-bottom:20px; }
 
 button{
   width:100%;
@@ -39,6 +32,7 @@ button{
   border:none;
   color:white;
   border-radius:8px;
+  font-weight:bold;
 }
 </style>
 </head>
@@ -47,12 +41,11 @@ button{
 
 <h2>Nifty 15-Min Intelligence Engine</h2>
 
-<div class="card" id="marketStatus"></div>
+<div id="marketStatus" class="card"></div>
 
 <div class="card">
   <h3>📊 Market Overview</h3>
-  <div id="market">Loading...</div>
-  <div id="vix">Loading VIX...</div>
+  <div id="overviewBox">Loading...</div>
 </div>
 
 <div class="card">
@@ -62,117 +55,69 @@ button{
 
 <div class="card">
   <h3>🎯 Final Decision</h3>
-  <div id="finalDecision">Loading...</div>
+  <div id="decisionBox">Loading...</div>
 </div>
 
-<div class="card">
-  <h3>📰 Latest Market News</h3>
-  <div id="news">Loading...</div>
-</div>
-
-<button onclick="loadAll()">Refresh Now</button>
+<button onclick="loadIntelligence()">Refresh Now</button>
 
 <script>
 
-function isMarketHours() {
-  const now = new Date();
-  const day = now.getDay();
-  const hour = now.getHours();
-  const min = now.getMinutes();
-  const current = hour * 60 + min;
-  return day !== 0 && day !== 6 && current >= 555 && current <= 930;
-}
+async function loadIntelligence() {
+  try {
+    const res = await fetch("/api/intelligence");
+    const data = await res.json();
 
-async function loadAll(){
-  if(!isMarketHours()){
+    // MARKET CLOSED
+    if (data.marketStatus !== "OPEN") {
+      document.getElementById("marketStatus").innerHTML =
+        `<span class="yellow"><b>${data.message}</b></span>`;
+
+      document.getElementById("overviewBox").innerHTML = "-";
+      document.getElementById("trendBox").innerHTML = "-";
+      document.getElementById("decisionBox").innerHTML = "-";
+      return;
+    }
+
+    // MARKET OPEN
     document.getElementById("marketStatus").innerHTML =
-      `<div class="yellow"><b>Market Closed (Weekend or Outside Trading Hours)</b></div>`;
-  } else {
+      `<span class="green"><b>Market Live</b></span>`;
+
+    // MARKET OVERVIEW
+    document.getElementById("overviewBox").innerHTML = `
+      Current Price: ${data.currentPrice}<br>
+      Previous Close: ${data.previousClose}<br>
+      EMA 9: ${data.ema9}<br>
+      EMA 21: ${data.ema21}<br>
+      RSI: ${data.rsi}
+    `;
+
+    // TREND
+    document.getElementById("trendBox").innerHTML = `
+      Trend Slope: ${data.trendSlope}<br>
+      Confidence Score: ${data.confidence}%
+    `;
+
+    // FINAL DECISION
+    const color = data.decision.includes("CALL") ? "green" : "red";
+
+    document.getElementById("decisionBox").innerHTML = `
+      <span class="${color}" style="font-size:22px;font-weight:bold">
+        ${data.decision}
+      </span><br><br>
+      Entry Level: ${data.suggestedEntry}<br>
+      Invalidation Level: ${data.invalidationLevel}<br>
+      Confidence: ${data.confidence}%
+    `;
+
+  } catch (err) {
     document.getElementById("marketStatus").innerHTML =
-      `<div class="green"><b>Market Live</b></div>`;
+      `<span class="red">Error loading intelligence</span>`;
   }
-
-  loadMarket();
-  loadVix();
-  loadNews();
-  loadIntelligence();
 }
 
-async function loadMarket(){
-  const res = await fetch("/api/nifty");
-  const data = await res.json();
-
-  const meta = data.chart.result[0].meta;
-  const current = meta.regularMarketPrice;
-  const prev = meta.previousClose;
-  const change = (current - prev).toFixed(2);
-
-  document.getElementById("market").innerHTML =
-    `Current: ${current}<br>
-     Change: <span class="${change>0?'green':'red'}">${change}</span>`;
-}
-
-async function loadVix(){
-  const res = await fetch("/api/vix");
-  const data = await res.json();
-  const vix = data.chart.result[0].meta.regularMarketPrice;
-  document.getElementById("vix").innerHTML =
-    `India VIX: ${vix}`;
-}
-
-async function loadNews(){
-  const res = await fetch("/api/news");
-  const data = await res.json();
-
-  let html = "";
-
-  if (!data.articles || data.articles.length === 0) {
-    html = "No news available.";
-  } else {
-    data.articles.slice(0,5).forEach(article => {
-      html += `
-        <div style="margin-bottom:10px">
-          <a href="${article.url}" target="_blank" style="color:white;text-decoration:none">
-            <b>${article.title}</b>
-          </a>
-          <br>
-          <small style="opacity:0.7">${article.source.name}</small>
-          <hr>
-        </div>
-      `;
-    });
-  }
-
-  document.getElementById("news").innerHTML = html;
-}
-
-async function loadIntelligence(){
-  const res = await fetch("/api/intelligence");
-  const data = await res.json();
-
-  if(data.marketStatus === "CLOSED"){
-    document.getElementById("finalDecision").innerHTML =
-      `<div class="highlight yellow">${data.message}</div>`;
-    document.getElementById("trendBox").innerHTML = "-";
-    return;
-  }
-
-  document.getElementById("trendBox").innerHTML =
-    `Momentum Score: ${data.momentumScore}<br>
-     Trend Strength: ${data.trendStrength}`;
-
-  const color = data.signal === "CALL" ? "green" : "red";
-
-  document.getElementById("finalDecision").innerHTML =
-    `<div class="highlight ${color}">
-        ${data.signal} SIDE<br>
-        Confidence: ${data.confidence}%<br>
-        Entry Level: ${data.entry}
-     </div>`;
-}
-
-setInterval(loadAll, 15000); // auto refresh every 15 sec
-loadAll();
+// Auto refresh every 5 seconds
+loadIntelligence();
+setInterval(loadIntelligence, 5000);
 
 </script>
 
