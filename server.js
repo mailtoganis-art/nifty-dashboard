@@ -1,178 +1,178 @@
 const express = require("express");
-const fetch = require("node-fetch");
+const axios = require("axios");
+const fs = require("fs");
 const path = require("path");
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+const PORT = 3000;
 
-app.use(express.static(path.join(__dirname, "public")));
+// 🔁 Replace with your real Nifty 5-min OHLC API
+const DATA_URL = "https://your-api.com/nifty-5min";
 
-/* =========================
-   MARKET HOURS CHECK (IST)
-========================= */
+const LOG_FILE = "trade_log.csv";
 
-function isMarketOpen() {
-  const now = new Date();
-  const ist = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-
-  const day = ist.getDay(); // 0=Sun, 6=Sat
-  const hours = ist.getHours();
-  const minutes = ist.getMinutes();
-
-  if (day === 0 || day === 6) return false; // weekend
-
-  const totalMinutes = hours * 60 + minutes;
-  const marketStart = 9 * 60 + 15;
-  const marketEnd = 15 * 60 + 30;
-
-  return totalMinutes >= marketStart && totalMinutes <= marketEnd;
+if (!fs.existsSync(LOG_FILE)) {
+  fs.writeFileSync(
+    LOG_FILE,
+    "timestamp,signal,confidence,regime,entryPrice,outcome\n"
+  );
 }
 
-/* =========================
-   NIFTY DATA
-========================= */
+// =====================
+// Utility Functions
+// =====================
 
-app.get("/api/nifty", async (req, res) => {
+function mean(arr) {
+  return arr.reduce((a, b) => a + b) / arr.length;
+}
+
+function stdDev(arr) {
+  const m = mean(arr);
+  return Math.sqrt(mean(arr.map(x => (x - m) ** 2)));
+}
+
+function EMA(data, period) {
+  const k = 2 / (period + 1);
+  let ema = data[0];
+  for (let i = 1; i < data.length; i++) {
+    ema = data[i] * k + ema * (1 - k);
+  }
+  return ema;
+}
+
+function ATR(candles, period = 14) {
+  let trs = [];
+  for (let i = 1; i < candles.length; i++) {
+    const high = candles[i].high;
+    const low = candles[i].low;
+    const prevClose = candles[i - 1].close;
+    trs.push(Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose)));
+  }
+  return mean(trs.slice(-period));
+}
+
+function VWAP(candles) {
+  let cumPV = 0;
+  let cumVol = 0;
+  candles.forEach(c => {
+    const typical = (c.high + c.low + c.close) / 3;
+    cumPV += typical * (c.volume || 1);
+    cumVol += (c.volume || 1);
+  });
+  return cumPV / cumVol;
+}
+
+// =====================
+// Quant Core Engine
+// =====================
+
+function analyzeMarket(candles) {
+  const last20 = candles.slice(-20);
+  const closes = last20.map(c => c.close);
+
+  const current = last20[last20.length - 1];
+  const price = current.close;
+
+  // --- ATR Regime ---
+  const atr = ATR(last20);
+  const avgRange = mean(last20.map(c => c.high - c.low));
+  const volatilityRatio = atr / avgRange;
+
+  let regime = "RANGE";
+  if (volatilityRatio > 1.2) regime = "VOLATILE";
+  if (volatilityRatio < 0.8) regime = "COMPRESSION";
+
+  // --- EMA Slope ---
+  const emaFast = EMA(closes, 5);
+  const emaSlow = EMA(closes, 15);
+  const slope = emaFast - emaSlow;
+
+  // --- Z-Score ---
+  const z = (price - mean(closes)) / stdDev(closes);
+
+  // --- VWAP Deviation ---
+  const vwap = VWAP(last20);
+  const vwapDev = (price - vwap) / atr;
+
+  // =====================
+  // Weighted Probability
+  // =====================
+
+  let bull = 0;
+  let bear = 0;
+
+  if (slope > 0) bull += 25;
+  if (slope < 0) bear += 25;
+
+  if (z > 0.8) bull += 20;
+  if (z < -0.8) bear += 20;
+
+  if (vwapDev > 0.5) bull += 15;
+  if (vwapDev < -0.5) bear += 15;
+
+  if (regime === "VOLATILE") {
+    bull *= 1.1;
+    bear *= 1.1;
+  }
+
+  const confidence = Math.min(Math.abs(bull - bear), 100);
+
+  let signal = "WAIT";
+  if (bull > bear && confidence > 55) signal = "CALL";
+  if (bear > bull && confidence > 55) signal = "PUT";
+
+  let confirmation = "NORMAL SETUP";
+  if (confidence >= 75) {
+    confirmation = "STRONGLY CONFIRMED – MULTI FACTOR ALIGNMENT";
+  }
+  if (confidence < 50) {
+    signal = "WAIT";
+    confirmation = "LOW EDGE – NO TRADE";
+  }
+
+  return {
+    signal,
+    confidence,
+    regime,
+    price,
+    confirmation
+  };
+}
+
+// =====================
+// API Routes
+// =====================
+
+app.use(express.static(__dirname));
+
+app.get("/analysis", async (req, res) => {
   try {
-    const response = await fetch(
-      "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=5m&range=1d"
-    );
-    const data = await response.json();
-    res.json(data);
+    const response = await axios.get(DATA_URL);
+    const candles = response.data;
+
+    const result = analyzeMarket(candles);
+
+    // Log signal
+    if (result.signal !== "WAIT") {
+      const line = `${new Date().toISOString()},${result.signal},${result.confidence},${result.regime},${result.price},PENDING\n`;
+      fs.appendFileSync(LOG_FILE, line);
+    }
+
+    res.json(result);
   } catch (err) {
-    res.status(500).json({ error: "Nifty fetch failed" });
+    res.status(500).json({ error: "Data fetch failed" });
   }
 });
 
-/* =========================
-   VIX DATA
-========================= */
+app.get("/performance", (req, res) => {
+  const data = fs.readFileSync(LOG_FILE, "utf8").split("\n").slice(1);
+  const trades = data.filter(row => row.includes("CALL") || row.includes("PUT"));
 
-app.get("/api/vix", async (req, res) => {
-  try {
-    const response = await fetch(
-      "https://query1.finance.yahoo.com/v8/finance/chart/%5EINDIAVIX?range=1d"
-    );
-    const data = await response.json();
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: "VIX fetch failed" });
-  }
+  res.json({
+    totalTrades: trades.length
+  });
 });
-
-/* =========================
-   INTELLIGENCE ENGINE
-========================= */
-
-app.get("/api/intelligence", async (req, res) => {
-  try {
-
-    if (!isMarketOpen()) {
-      return res.json({
-        marketStatus: "CLOSED",
-        message: "Market Closed (Weekend or Outside Trading Hours)"
-      });
-    }
-
-    const response = await fetch(
-      "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=5m&range=1d"
-    );
-
-    const raw = await response.json();
-
-    if (!raw.chart || !raw.chart.result || !raw.chart.result[0]) {
-      return res.json({ error: "No market data available" });
-    }
-
-    const result = raw.chart.result[0];
-    const meta = result.meta;
-    const closes = result.indicators.quote[0].close.filter(v => v !== null);
-
-    if (!closes || closes.length < 25) {
-      return res.json({ error: "Insufficient candle data" });
-    }
-
-    const currentPrice = meta.regularMarketPrice;
-    const previousClose = meta.previousClose;
-
-    /* ===== EMA ===== */
-    function ema(period, data) {
-      const k = 2 / (period + 1);
-      let emaVal = data[0];
-      for (let i = 1; i < data.length; i++) {
-        emaVal = data[i] * k + emaVal * (1 - k);
-      }
-      return emaVal;
-    }
-
-    const ema9 = ema(9, closes);
-    const ema21 = ema(21, closes);
-
-    /* ===== RSI ===== */
-    function calculateRSI(data, period = 14) {
-      let gains = 0;
-      let losses = 0;
-
-      for (let i = data.length - period; i < data.length - 1; i++) {
-        const diff = data[i + 1] - data[i];
-        if (diff >= 0) gains += diff;
-        else losses -= diff;
-      }
-
-      const rs = gains / (losses || 1);
-      return 100 - 100 / (1 + rs);
-    }
-
-    const rsi = calculateRSI(closes);
-
-    /* ===== TREND SLOPE ===== */
-    const trendSlope =
-      closes[closes.length - 1] - closes[closes.length - 6];
-
-    /* ===== DECISION LOGIC ===== */
-    let decision = "WAIT";
-    let confidence = 50;
-
-    if (ema9 > ema21 && rsi > 55 && trendSlope > 0) {
-      decision = "CALL";
-      confidence = 80;
-    }
-    else if (ema9 < ema21 && rsi < 45 && trendSlope < 0) {
-      decision = "PUT";
-      confidence = 80;
-    }
-
-    const suggestedEntry = currentPrice;
-
-    const invalidationLevel =
-      decision === "CALL"
-        ? currentPrice - 20
-        : decision === "PUT"
-        ? currentPrice + 20
-        : null;
-
-    res.json({
-      marketStatus: "OPEN",
-      currentPrice,
-      previousClose,
-      ema9: ema9.toFixed(2),
-      ema21: ema21.toFixed(2),
-      rsi: rsi.toFixed(2),
-      trendSlope: trendSlope.toFixed(2),
-      decision,
-      confidence,
-      suggestedEntry,
-      invalidationLevel
-    });
-
-  } catch (err) {
-    console.log("INTELLIGENCE ERROR:", err);
-    res.status(500).json({ error: "Intelligence Engine Failed" });
-  }
-});
-
-/* ========================= */
 
 app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
+  console.log(`Quant Engine running at http://localhost:${PORT}`);
 });
