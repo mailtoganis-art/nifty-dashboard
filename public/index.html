@@ -1,124 +1,43 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nifty 15-Min Intelligence Engine</title>
-
-<style>
-body{
-  font-family: Arial;
-  background:#0f172a;
-  color:white;
-  padding:20px;
-}
-
-.card{
-  background:#1e293b;
-  padding:15px;
-  border-radius:12px;
-  margin-bottom:15px;
-}
-
-.green{ color:#22c55e; }
-.red{ color:#ef4444; }
-.yellow{ color:#facc15; }
-
-h2{ margin-bottom:20px; }
-
-button{
-  width:100%;
-  padding:12px;
-  background:#2563eb;
-  border:none;
-  color:white;
-  border-radius:8px;
-  font-weight:bold;
-}
-</style>
+  <title>Nifty Quant Engine</title>
+  <style>
+    body { background:#111; color:#fff; font-family:Arial; text-align:center; }
+    .box { margin-top:60px; }
+    .signal { font-size:40px; margin:20px; }
+    .info { font-size:20px; margin:10px; }
+  </style>
 </head>
-
 <body>
 
-<h2>Nifty 15-Min Intelligence Engine</h2>
-
-<div id="marketStatus" class="card"></div>
-
-<div class="card">
-  <h3>📊 Market Overview</h3>
-  <div id="overviewBox">Loading...</div>
+<div class="box">
+  <h1>NIFTY F&O QUANT ENGINE</h1>
+  <div class="signal" id="signal">Loading...</div>
+  <div class="info" id="confidence"></div>
+  <div class="info" id="regime"></div>
+  <div class="info" id="confirmation"></div>
 </div>
-
-<div class="card">
-  <h3>📈 Trend & Momentum</h3>
-  <div id="trendBox">Loading...</div>
-</div>
-
-<div class="card">
-  <h3>🎯 Final Decision</h3>
-  <div id="decisionBox">Loading...</div>
-</div>
-
-<button onclick="loadIntelligence()">Refresh Now</button>
 
 <script>
+async function loadData() {
+  const res = await fetch("/analysis");
+  const data = await res.json();
 
-async function loadIntelligence() {
-  try {
-    const res = await fetch("/api/intelligence");
-    const data = await res.json();
+  document.getElementById("signal").innerText = data.signal;
+  document.getElementById("confidence").innerText =
+    "Confidence: " + data.confidence + "%";
+  document.getElementById("regime").innerText =
+    "Regime: " + data.regime;
+  document.getElementById("confirmation").innerText =
+    data.confirmation;
 
-    // MARKET CLOSED
-    if (data.marketStatus !== "OPEN") {
-      document.getElementById("marketStatus").innerHTML =
-        `<span class="yellow"><b>${data.message}</b></span>`;
-
-      document.getElementById("overviewBox").innerHTML = "-";
-      document.getElementById("trendBox").innerHTML = "-";
-      document.getElementById("decisionBox").innerHTML = "-";
-      return;
-    }
-
-    // MARKET OPEN
-    document.getElementById("marketStatus").innerHTML =
-      `<span class="green"><b>Market Live</b></span>`;
-
-    // MARKET OVERVIEW
-    document.getElementById("overviewBox").innerHTML = `
-      Current Price: ${data.currentPrice}<br>
-      Previous Close: ${data.previousClose}<br>
-      EMA 9: ${data.ema9}<br>
-      EMA 21: ${data.ema21}<br>
-      RSI: ${data.rsi}
-    `;
-
-    // TREND
-    document.getElementById("trendBox").innerHTML = `
-      Trend Slope: ${data.trendSlope}<br>
-      Confidence Score: ${data.confidence}%
-    `;
-
-    // FINAL DECISION
-    const color = data.decision.includes("CALL") ? "green" : "red";
-
-    document.getElementById("decisionBox").innerHTML = `
-      <span class="${color}" style="font-size:22px;font-weight:bold">
-        ${data.decision}
-      </span><br><br>
-      Entry Level: ${data.suggestedEntry}<br>
-      Invalidation Level: ${data.invalidationLevel}<br>
-      Confidence: ${data.confidence}%
-    `;
-
-  } catch (err) {
-    document.getElementById("marketStatus").innerHTML =
-      `<span class="red">Error loading intelligence</span>`;
-  }
+  if (data.confidence >= 75)
+    document.getElementById("confirmation").style.color = "lime";
 }
 
-// Auto refresh every 5 seconds
-loadIntelligence();
-setInterval(loadIntelligence, 5000);
-
+loadData();
+setInterval(loadData, 60000);
 </script>
 
 </body>
