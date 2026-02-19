@@ -4,15 +4,15 @@ const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// 🔥 Serve frontend from public folder
 app.use(express.static("public"));
 
 // ===============================
 // CONFIG
 // ===============================
 
-// 🔁 Replace later with real API
 const DATA_URL = process.env.DATA_URL || null;
-
 const LOG_FILE = "trade_log.csv";
 
 // ===============================
@@ -149,7 +149,7 @@ function analyzeMarket(candles) {
 }
 
 // ===============================
-// DATA FETCH (SAFE MODE)
+// SAFE DATA FETCH
 // ===============================
 
 async function fetchCandles() {
@@ -158,8 +158,8 @@ async function fetchCandles() {
 
     const response = await axios.get(DATA_URL);
     return response.data;
+
   } catch (err) {
-    // FALLBACK SAFE MOCK DATA
     console.log("Using mock data mode");
 
     return Array.from({ length: 30 }).map(() => ({
@@ -175,12 +175,6 @@ async function fetchCandles() {
 // ROUTES
 // ===============================
 
-// Health Check
-app.get("/", (req, res) => {
-  res.send("Quant Engine Running Successfully");
-});
-
-// Analysis Route
 app.get("/analysis", async (req, res) => {
   try {
     const candles = await fetchCandles();
@@ -198,7 +192,6 @@ app.get("/analysis", async (req, res) => {
   }
 });
 
-// Performance Route
 app.get("/performance", (req, res) => {
   const data = fs.readFileSync(LOG_FILE, "utf8").split("\n").slice(1);
   const trades = data.filter(row =>
