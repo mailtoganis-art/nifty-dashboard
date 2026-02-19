@@ -1,43 +1,76 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Nifty Quant Engine</title>
-  <style>
-    body { background:#111; color:#fff; font-family:Arial; text-align:center; }
-    .box { margin-top:60px; }
-    .signal { font-size:40px; margin:20px; }
-    .info { font-size:20px; margin:10px; }
-  </style>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NIFTY 15-Min Engine</title>
+
+<style>
+body {
+  font-family: Arial;
+  background: #111827;
+  color: white;
+  text-align: center;
+  padding: 20px;
+}
+
+.card {
+  background: #1f2937;
+  padding: 20px;
+  border-radius: 10px;
+  margin: 20px auto;
+  max-width: 400px;
+}
+
+.green { color: #00ff88; }
+.red { color: #ff4d4d; }
+.orange { color: orange; }
+
+h1 { margin-bottom: 10px; }
+</style>
 </head>
+
 <body>
 
-<div class="box">
-  <h1>NIFTY F&O QUANT ENGINE</h1>
-  <div class="signal" id="signal">Loading...</div>
-  <div class="info" id="confidence"></div>
-  <div class="info" id="regime"></div>
-  <div class="info" id="confirmation"></div>
+<h1>NIFTY Quant Engine</h1>
+
+<div class="card">
+  <h2 id="signal">Loading...</h2>
+  <p>Confidence: <span id="confidence"></span>%</p>
+  <p>Regime: <span id="regime"></span></p>
+  <p>Price: <span id="price"></span></p>
+  <p id="confirmation"></p>
 </div>
 
 <script>
 async function loadData() {
-  const res = await fetch("/analysis");
-  const data = await res.json();
+  try {
+    const res = await fetch("/analysis");
+    const data = await res.json();
 
-  document.getElementById("signal").innerText = data.signal;
-  document.getElementById("confidence").innerText =
-    "Confidence: " + data.confidence + "%";
-  document.getElementById("regime").innerText =
-    "Regime: " + data.regime;
-  document.getElementById("confirmation").innerText =
-    data.confirmation;
+    const signalEl = document.getElementById("signal");
+    const confEl = document.getElementById("confidence");
+    const regimeEl = document.getElementById("regime");
+    const priceEl = document.getElementById("price");
+    const confirmEl = document.getElementById("confirmation");
 
-  if (data.confidence >= 75)
-    document.getElementById("confirmation").style.color = "lime";
+    signalEl.innerText = data.signal;
+    confEl.innerText = data.confidence;
+    regimeEl.innerText = data.regime;
+    priceEl.innerText = data.price.toFixed(2);
+    confirmEl.innerText = data.confirmation;
+
+    signalEl.className = "";
+    if (data.signal === "CALL") signalEl.classList.add("green");
+    else if (data.signal === "PUT") signalEl.classList.add("red");
+    else signalEl.classList.add("orange");
+
+  } catch (err) {
+    console.error("Error loading data");
+  }
 }
 
 loadData();
-setInterval(loadData, 60000);
+setInterval(loadData, 30000);
 </script>
 
 </body>
